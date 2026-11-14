@@ -27,6 +27,8 @@ test('page adapter returns a changed latest message once', async () => {
 
 test('panel has Start, Pause, and round status without end control', () => {
   const created = {};
+  let dryRunChanges = 0;
+  let dryRunValue = null;
   const document = {
     body: {
       appendChild(element) {
@@ -70,14 +72,37 @@ test('panel has Start, Pause, and round status without end control', () => {
   const panel = createPanel({
     document,
     controller,
+    initialDryRun: true,
+    onDryRunChange(value) {
+      dryRunChanges += 1;
+      dryRunValue = value;
+    },
     onStart() {},
     onPause() {},
     onReauth() {},
   });
   assert.ok(created.element);
+  assert.match(
+    JSON.stringify(created.element),
+    /仅生成不发送/,
+  );
   assert.doesNotMatch(
     JSON.stringify(created.element),
     /AI结束练习并评估/,
   );
+  const findCheckbox = (element) => {
+    if (element?.type === 'checkbox') return element;
+    for (const child of element?.children ?? []) {
+      const found = findCheckbox(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  const checkbox = findCheckbox(created.element);
+  assert.equal(checkbox.checked, true);
+  checkbox.checked = false;
+  checkbox.onchange?.();
+  assert.equal(dryRunChanges, 1);
+  assert.equal(dryRunValue, false);
   panel.destroy();
 });

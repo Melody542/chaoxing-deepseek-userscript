@@ -2,6 +2,7 @@
 
 const {
   createPageAdapter,
+  writeAndSend,
 } = require('./chaoxing.cjs');
 const { createController } = require('./controller.cjs');
 const {
@@ -50,6 +51,8 @@ function createPanel({
   onStart,
   onPause,
   onReauth,
+  initialDryRun = false,
+  onDryRunChange = () => {},
 }) {
   const existing = document.getElementById('cx-ds-panel');
   existing?.remove();
@@ -74,13 +77,30 @@ function createPanel({
   title.style.cssText = 'font-weight:600;margin-bottom:6px;';
   const status = document.createElement('div');
   status.style.cssText = 'margin-bottom:8px;white-space:pre-wrap;';
+  const dryRunLabel = document.createElement('label');
+  dryRunLabel.style.cssText = [
+    'display:flex',
+    'align-items:center',
+    'gap:6px',
+    'margin-bottom:8px',
+    'cursor:pointer',
+  ].join(';');
+  const dryRunInput = document.createElement('input');
+  dryRunInput.type = 'checkbox';
+  dryRunInput.checked = Boolean(initialDryRun);
+  dryRunInput.addEventListener('change', () => {
+    onDryRunChange(dryRunInput.checked);
+  });
+  const dryRunText = document.createElement('span');
+  dryRunText.textContent = '仅生成不发送';
+  dryRunLabel.append(dryRunInput, dryRunText);
   const actions = document.createElement('div');
   const start = makeButton(document, '开始', onStart);
   const pause = makeButton(document, '暂停', onPause, true);
   const reauth = makeButton(document, '重新授权', onReauth, false);
   reauth.style.display = 'none';
   actions.append(start, pause, reauth);
-  panel.append(title, status, actions);
+  panel.append(title, status, dryRunLabel, actions);
   document.body.appendChild(panel);
 
   const unsubscribe = controller.onChange((state) => {
@@ -155,17 +175,19 @@ async function loadPowWasm() {
 
 function bootstrap() {
   const document = globalThis.document;
-  const dryRun = GM_getValue(DRY_RUN_KEY, false);
+  let dryRun = Boolean(GM_getValue(DRY_RUN_KEY, false));
   const page = createPageAdapter(document, {
-    sendAnswer: dryRun
-      ? async (answer) => {
-          console.info(
-            '[Chaoxing DeepSeek] dry run:',
-            answer.slice(0, 20),
-            `(${answer.length} chars)`,
-          );
-        }
-      : undefined,
+    sendAnswer: async (answer) => {
+      if (dryRun) {
+        console.info(
+          '[Chaoxing DeepSeek] dry run:',
+          answer.slice(0, 20),
+          `(${answer.length} chars)`,
+        );
+        return;
+      }
+      await writeAndSend(document, answer);
+    },
   });
   const ai = createDeepSeekClient({
     request: gmRequest,
@@ -184,6 +206,11 @@ function bootstrap() {
   const panel = createPanel({
     document,
     controller,
+    initialDryRun: dryRun,
+    onDryRunChange: (value) => {
+      dryRun = value;
+      GM_setValue(DRY_RUN_KEY, value);
+    },
     onStart: async () => {
       try {
         await ensureToken();
