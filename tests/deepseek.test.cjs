@@ -119,3 +119,38 @@ test('solvePow maps official WASM failure to an error', () => {
     /No solution found/,
   );
 });
+
+test('solvePow uses expire_at rather than signature for the hash prefix', () => {
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  const view = new DataView(memory.buffer);
+  const decoder = new TextDecoder();
+  let nextPointer = 64;
+  let capturedPrefix = '';
+  const exports = {
+    memory,
+    __wbindgen_add_to_stack_pointer: (delta) => (delta < 0 ? 16 : 0),
+    __wbindgen_export_0: (length) => {
+      const pointer = nextPointer;
+      nextPointer += length + 8;
+      return pointer;
+    },
+    __wbindgen_export_1: () => 0,
+    wasm_solve: (_stack, _challengePtr, _challengeLen, prefixPtr, prefixLen) => {
+      capturedPrefix = decoder.decode(
+        new Uint8Array(memory.buffer, prefixPtr, prefixLen),
+      );
+      view.setInt32(16, 1, true);
+      view.setFloat64(24, 42, true);
+    },
+  };
+
+  assert.equal(solvePow({
+    algorithm: 'DeepSeekHashV1',
+    challenge: 'abc',
+    salt: 'salt-value',
+    signature: 'separate-signature',
+    expire_at: 1794662699108,
+    difficulty: 144000,
+  }, exports), 42);
+  assert.equal(capturedPrefix, 'salt-value_1794662699108_');
+});

@@ -382,7 +382,8 @@ function solvePow(challenge, wasmExports) {
   const stack = wasmExports.__wbindgen_add_to_stack_pointer(-16);
   try {
     const challengePart = allocate(challenge.challenge);
-    const prefixPart = allocate(`${challenge.salt}_${challenge.signature}_`);
+    const proofValue = challenge.expire_at ?? challenge.signature;
+    const prefixPart = allocate(`${challenge.salt}_${proofValue}_`);
     wasmExports.wasm_solve(
       stack,
       challengePart.pointer,
