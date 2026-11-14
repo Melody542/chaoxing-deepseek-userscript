@@ -138,6 +138,33 @@ function isPageUsable(document) {
   );
 }
 
+function createPageAdapter(document, overrides = {}) {
+  const readMessage = overrides.readLatestAssistantMessage
+    ?? readLatestAssistantMessage;
+  const getComposer = overrides.findComposer ?? findComposer;
+  const getButton = overrides.findSendButton ?? findSendButton;
+  const sendAnswer = overrides.sendAnswer
+    ?? (async (answer) => writeAndSend(document, answer));
+  return {
+    async waitForQuestion(previousHash) {
+      const latest = readMessage(document);
+      return latest && latest.hash !== previousHash ? latest : null;
+    },
+    readTaskContext: () => readTaskContext(document),
+    readHistory: () => readHistory(document),
+    async send(answer) {
+      if (!getComposer(document)) throw new Error('超星输入框已消失');
+      if (!getButton(document)) throw new Error('超星发送按钮已消失');
+      await sendAnswer(answer);
+    },
+    usable: () => Boolean(
+      getComposer(document)
+      && getButton(document)
+      && readMessage(document),
+    ),
+  };
+}
+
 module.exports = {
   CALIBRATION,
   findComposer,
@@ -147,4 +174,5 @@ module.exports = {
   readLatestAssistantMessage,
   writeAndSend,
   isPageUsable,
+  createPageAdapter,
 };
