@@ -53,3 +53,32 @@ test('SSE parser survives chunk boundaries and ignores thinking text', () => {
   assert.equal(state.answer, '第一段');
   assert.doesNotMatch(state.answer, /内部思考/);
 });
+
+test('SSE parser handles fragment arrays and status-only deltas', () => {
+  const state = createSseState();
+  const events = consumeSseText(
+    state,
+    [
+      'event: delta\ndata: {"p":"response/fragments","o":"APPEND","v":[',
+      '{"id":1,"type":"THINK","content":"思考内容"},',
+      '{"id":2,"type":"RESPONSE","content":"可见回答"}',
+      ']}\n\n',
+      'event: delta\ndata: {"p":"response/fragments/-1/content","o":"APPEND","v":"续写"}\n\n',
+      'event: delta\ndata: {"p":"response/status","v":"FINISHED"}\n\n',
+    ].join(''),
+  );
+  events.forEach((event) => applySseEvent(state, event));
+  assert.equal(state.answer, '可见回答续写');
+  assert.equal(state.finished, true);
+  assert.doesNotMatch(state.answer, /FINISHED|思考内容/);
+});
+
+test('SSE parser accepts data-only delta frames', () => {
+  const state = createSseState();
+  const events = consumeSseText(
+    state,
+    'data: {"p":"response/fragments","o":"APPEND","v":[{"type":"ANSWER","content":"直接正文"}]}\n\n',
+  );
+  events.forEach((event) => applySseEvent(state, event));
+  assert.equal(state.answer, '直接正文');
+});

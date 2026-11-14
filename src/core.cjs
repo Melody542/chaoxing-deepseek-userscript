@@ -37,6 +37,8 @@ function createSseState() {
   return {
     buffer: '',
     answer: '',
+    directContent: '',
+    fragments: [],
     responseMessageId: null,
     finished: false,
     thinking: '',
@@ -59,9 +61,12 @@ function consumeSseText(state, chunk) {
       .split('\n')
       .filter((line) => line.startsWith('data:'))
       .map((line) => line.slice(5).trim());
-    if (eventName && dataLines.length) {
+    if (dataLines.length) {
       try {
-        events.push({ event: eventName, data: JSON.parse(dataLines.join('\n')) });
+        events.push({
+          event: eventName || 'delta',
+          data: JSON.parse(dataLines.join('\n')),
+        });
       } catch {
         events.push({ event: 'parse_error', data: dataLines.join('\n') });
       }
@@ -71,14 +76,141 @@ function consumeSseText(state, chunk) {
   return events;
 }
 
-function appendVisibleValue(state, path, operation, value) {
-  if (typeof value !== 'string') return;
-  if (/thinking|reasoning/i.test(path)) {
-    state.thinking += value;
+function isVisibleFragment(fragment) {
+  const type = String(fragment?.type ?? '').toUpperCase();
+  return !['THINK', 'THINKING', 'REASONING', 'TOOL', 'SEARCH'].includes(type);
+}
+
+function recomputeAnswer(state) {
+  const fragmentText = state.fragments
+    .filter(isVisibleFragment)
+    .map((fragment) => fragment.content ?? '')
+    .join('');
+  state.answer = `${state.directContent}${fragmentText}`;
+}
+
+function mergeFragment(state, value, replace = false) {
+  if (!value || typeof value !== 'object') return;
+  const id = value.id;
+  let index = id == null
+    ? -1
+    : state.fragments.findIndex((fragment) => fragment.id === id);
+  if (index < 0 && replace) index = state.fragments.length - 1;
+  if (index < 0) {
+    state.fragments.push({
+      id,
+      type: value.type ?? '',
+      content: typeof value.content === 'string' ? value.content : '',
+    });
+  } else {
+    state.fragments[index] = {
+      ...state.fragments[index],
+      ...value,
+      content: typeof value.content === 'string'
+        ? value.content
+        : state.fragments[index].content,
+    };
+  }
+  recomputeAnswer(state);
+}
+
+function mergeFragments(state, value, replace = false) {
+  if (Array.isArray(value)) {
+    value.forEach((fragment) => mergeFragment(state, fragment, replace));
+  } else if (value && typeof value === 'object') {
+    mergeFragment(state, value, replace);
+  }
+}
+
+function fragmentPathTarget(state, path) {
+  const match = path.match(/fragments\/([^/]+)\/content$/);
+  if (!match) return -1;
+  const token = match[1];
+  const byId = state.fragments.findIndex(
+    (fragment) => String(fragment.id) === token,
+  );
+  if (byId >= 0) return byId;
+  const numeric = Number(token);
+  if (!Number.isInteger(numeric)) return -1;
+  if (numeric < 0) return state.fragments.length + numeric;
+  return numeric;
+}
+
+function applyDelta(state, delta) {
+  if (!delta || typeof delta !== 'object') return;
+  if (delta.response && typeof delta.response === 'object') {
+    if (Array.isArray(delta.response.fragments)) {
+      state.fragments = [];
+      mergeFragments(state, delta.response.fragments);
+    }
+    if (typeof delta.response.content === 'string') {
+      state.directContent = delta.response.content;
+    }
+    recomputeAnswer(state);
     return;
   }
-  if (operation === 'SET') state.answer = value;
-  else state.answer += value;
+
+  const path = delta.p ?? '';
+  const operation = delta.o ?? 'APPEND';
+  const value = delta.v;
+
+  if (/thinking|reasoning/i.test(path)) {
+    if (typeof value === 'string') state.thinking += value;
+    return;
+  }
+  if (path === 'response/status') {
+    if (value === 'FINISHED') state.finished = true;
+    return;
+  }
+  if (path === 'response/fragments' || path.endsWith('/fragments')) {
+    mergeFragments(state, value, operation === 'SET');
+    return;
+  }
+  if (path === 'response' && value && typeof value === 'object') {
+    if (Array.isArray(value.fragments)) {
+      state.fragments = [];
+      mergeFragments(state, value.fragments);
+    }
+    if (typeof value.content === 'string') {
+      state.directContent = value.content;
+    }
+    recomputeAnswer(state);
+    return;
+  }
+  if (path === 'response/content') {
+    if (typeof value === 'string') {
+      if (operation === 'SET') state.directContent = value;
+      else state.directContent += value;
+      recomputeAnswer(state);
+    }
+    return;
+  }
+
+  const target = fragmentPathTarget(state, path);
+  if (target >= 0) {
+    if (typeof value === 'string') {
+      if (operation === 'SET') state.fragments[target].content = value;
+      else state.fragments[target].content = (
+        state.fragments[target].content ?? ''
+      ) + value;
+      recomputeAnswer(state);
+    } else if (value && typeof value === 'object') {
+      mergeFragment(state, value, true);
+    }
+    return;
+  }
+
+  if (path.endsWith('/content') && typeof value === 'string') {
+    if (operation === 'SET') state.directContent = value;
+    else state.directContent += value;
+    recomputeAnswer(state);
+    return;
+  }
+
+  if (!path && typeof value === 'string') {
+    state.directContent += value;
+    recomputeAnswer(state);
+  }
 }
 
 function applySseEvent(state, event) {
@@ -91,24 +223,7 @@ function applySseEvent(state, event) {
     return;
   }
   if (event.event !== 'delta') return;
-  const delta = event.data;
-  if (delta?.o === 'BATCH' && Array.isArray(delta.v)) {
-    delta.v.forEach((item) => {
-      appendVisibleValue(
-        state,
-        item.p ?? delta.p ?? '',
-        item.o ?? 'SET',
-        item.v,
-      );
-    });
-    return;
-  }
-  appendVisibleValue(
-    state,
-    delta?.p ?? '',
-    delta?.o ?? 'APPEND',
-    delta?.v,
-  );
+  applyDelta(state, event.data);
 }
 
 module.exports = {
