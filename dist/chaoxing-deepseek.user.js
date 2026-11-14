@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chaoxing AI Dialogue + DeepSeek
 // @namespace    local.chaoxing.deepseek
-// @version      0.2.0
+// @version      0.2.1
 // @description  Automatically answer the Chaoxing AI dialogue task using DeepSeek web API.
 // @match        https://mooc2-ans.chaoxing.com/mooc2-ans-vue/situationalDialogue/chat*
 // @match        https://chat.deepseek.com/*
@@ -68,7 +68,9 @@ function buildPrompt({ taskTitle, taskDescription, history, question }) {
     `任务说明：${normalizeText(taskDescription)}`,
     '请以任务要求的第一人称学生身份，用自然中文直接回答当前问题。',
     '不要复述问题，不要解释你是 AI，不要添加无关客套。',
-    '默认控制在 150 至 500 个汉字；问题要求分点时使用简短编号。',
+    '默认使用 450 至 700 个汉字；如果问题包含多个子问题，必须逐一回答，不能漏掉任何一部分。',
+    '回答要有完整逻辑：先给结论，再说明原因、机制和关键操作；逻辑完整优先于字数控制。',
+    '必要时可以略超 700 字，但不要用重复内容、空话或复述题目凑字数；分点时使用简短编号。',
     '只依据任务说明和对话内容，不虚构课程要求或操作结果。',
     recent ? `最近对话：\n${recent}` : '最近对话：无',
     `当前问题：${normalizeText(question)}`,

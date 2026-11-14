@@ -29,6 +29,9 @@ test('buildPrompt includes role, task, recent turns, and current question', () =
   assert.match(prompt, /第一人称学生/);
   assert.match(prompt, /页码从正文开始怎么做/);
   assert.match(prompt, /学生：老师好/);
+  assert.match(prompt, /450 至 700 个汉字/);
+  assert.match(prompt, /多个子问题.*逐一回答/);
+  assert.match(prompt, /逻辑完整.*优先/);
 });
 
 test('SSE parser survives chunk boundaries and ignores thinking text', () => {
