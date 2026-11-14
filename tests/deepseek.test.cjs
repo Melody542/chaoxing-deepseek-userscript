@@ -93,6 +93,7 @@ test('client creates a session and parses completion SSE', async () => {
   });
   assert.equal(calls.at(-1).headers.Authorization, 'Bearer token-1');
   assert.equal(calls.at(-1).headers['x-ds-pow-response'].length > 20, true);
+  assert.equal(JSON.parse(calls.at(-1).data).source, 'default');
 });
 
 test('solvePow maps official WASM failure to an error', () => {

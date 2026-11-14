@@ -82,3 +82,23 @@ test('SSE parser accepts data-only delta frames', () => {
   events.forEach((event) => applySseEvent(state, event));
   assert.equal(state.answer, '直接正文');
 });
+
+test('SSE parser handles a captured current DeepSeek response', () => {
+  const state = createSseState();
+  const response = [
+    'event: ready\ndata: {"request_message_id":1,"response_message_id":2,"model_type":"default"}\n\n',
+    'event: update_session\ndata: {"updated_at":1794662803.0656579}\n\n',
+    'data: {"v":{"response":{"message_id":2,"parent_id":1,"role":"ASSISTANT","status":"WIP","fragments":[{"id":2,"type":"RESPONSE","content":"测试"}],"has_pending_fragment":false}}}\n\n',
+    'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"成功"}\n\n',
+    'data: {"p":"response","o":"BATCH","v":[{"p":"accumulated_token_usage","v":42},{"p":"quasi_status","v":"FINISHED"}]}\n\n',
+    'data: {"p":"response/status","o":"SET","v":"FINISHED"}\n\n',
+    'event: title\ndata: {"content":"测试成功确认"}\n\n',
+    'event: close\ndata: {"click_behavior":"none","auto_resume":false}\n\n',
+  ].join('');
+  consumeSseText(state, response).forEach(
+    (event) => applySseEvent(state, event),
+  );
+  assert.equal(state.answer, '测试成功');
+  assert.equal(state.responseMessageId, 2);
+  assert.equal(state.finished, true);
+});

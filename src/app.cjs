@@ -9,7 +9,10 @@ const {
   createDeepSeekClient,
   instantiatePowWasm,
 } = require('./deepseek.cjs');
-const { extractDeepSeekToken } = require('./auth.cjs');
+const {
+  extractDeepSeekToken,
+  isAuthRequestActive,
+} = require('./auth.cjs');
 
 const TOKEN_KEY = 'cx_ds_token_v1';
 const AUTH_REQUEST_KEY = 'cx_ds_auth_request_v1';
@@ -154,6 +157,7 @@ function openAuthTab() {
       }
       if (Date.now() - started > 180000) {
         clearInterval(timer);
+        GM_setValue(AUTH_REQUEST_KEY, 0);
         reject(new Error('DeepSeek 授权超时'));
       }
     }, 500);
@@ -242,6 +246,13 @@ function bootstrap() {
 
 function bootstrapAuthPage() {
   const document = globalThis.document;
+  const requestStartedAt = GM_getValue(AUTH_REQUEST_KEY, 0);
+  if (!isAuthRequestActive(requestStartedAt)) {
+    if (Number(requestStartedAt) > 0) {
+      GM_setValue(AUTH_REQUEST_KEY, 0);
+    }
+    return;
+  }
   let finished = false;
   const notice = document.createElement('div');
   notice.textContent = '正在读取 DeepSeek 登录状态…';
@@ -269,6 +280,7 @@ function bootstrapAuthPage() {
     finished = true;
     GM_setValue(TOKEN_KEY, token);
     GM_setValue(AUTH_READY_KEY, Date.now());
+    GM_setValue(AUTH_REQUEST_KEY, 0);
     notice.textContent = '授权完成，正在返回超星页面…';
     setTimeout(() => {
       notice.remove();

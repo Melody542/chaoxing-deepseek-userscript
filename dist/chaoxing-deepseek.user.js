@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chaoxing AI Dialogue + DeepSeek
 // @namespace    local.chaoxing.deepseek
-// @version      0.1.0
+// @version      0.2.0
 // @description  Automatically answer the Chaoxing AI dialogue task using DeepSeek web API.
 // @match        https://mooc2-ans.chaoxing.com/mooc2-ans-vue/situationalDialogue/chat*
 // @match        https://chat.deepseek.com/*
@@ -180,13 +180,14 @@ function fragmentPathTarget(state, path) {
 
 function applyDelta(state, delta) {
   if (!delta || typeof delta !== 'object') return;
-  if (delta.response && typeof delta.response === 'object') {
-    if (Array.isArray(delta.response.fragments)) {
+  const responseSnapshot = delta.response ?? delta.v?.response;
+  if (responseSnapshot && typeof responseSnapshot === 'object') {
+    if (Array.isArray(responseSnapshot.fragments)) {
       state.fragments = [];
-      mergeFragments(state, delta.response.fragments);
+      mergeFragments(state, responseSnapshot.fragments);
     }
-    if (typeof delta.response.content === 'string') {
-      state.directContent = delta.response.content;
+    if (typeof responseSnapshot.content === 'string') {
+      state.directContent = responseSnapshot.content;
     }
     recomputeAnswer(state);
     return;
@@ -300,6 +301,14 @@ function extractDeepSeekToken(storage) {
   return normalizeStoredToken(storage?.getItem('userToken'));
 }
 
+function isAuthRequestActive(value, now = Date.now(), maxAgeMs = 300000) {
+  const startedAt = Number(value);
+  return Number.isFinite(startedAt)
+    && startedAt > 0
+    && startedAt <= now
+    && now - startedAt <= maxAgeMs;
+}
+
 function assertDeepSeekEnvelope(payload) {
   const bizCode = payload?.data?.biz_code;
   if (
@@ -324,6 +333,7 @@ function assertDeepSeekEnvelope(payload) {
 module.exports = {
   normalizeStoredToken,
   extractDeepSeekToken,
+  isAuthRequestActive,
   assertDeepSeekEnvelope,
 };
 
@@ -510,7 +520,7 @@ function createDeepSeekClient({
       ref_file_ids: [],
       thinking_enabled: false,
       search_enabled: false,
-      source: 'web',
+      source: 'default',
       action: null,
       preempt: false,
     };
@@ -895,7 +905,10 @@ const {
   createDeepSeekClient,
   instantiatePowWasm,
 } = require('./deepseek.cjs');
-const { extractDeepSeekToken } = require('./auth.cjs');
+const {
+  extractDeepSeekToken,
+  isAuthRequestActive,
+} = require('./auth.cjs');
 
 const TOKEN_KEY = 'cx_ds_token_v1';
 const AUTH_REQUEST_KEY = 'cx_ds_auth_request_v1';
@@ -1040,6 +1053,7 @@ function openAuthTab() {
       }
       if (Date.now() - started > 180000) {
         clearInterval(timer);
+        GM_setValue(AUTH_REQUEST_KEY, 0);
         reject(new Error('DeepSeek 授权超时'));
       }
     }, 500);
@@ -1128,6 +1142,13 @@ function bootstrap() {
 
 function bootstrapAuthPage() {
   const document = globalThis.document;
+  const requestStartedAt = GM_getValue(AUTH_REQUEST_KEY, 0);
+  if (!isAuthRequestActive(requestStartedAt)) {
+    if (Number(requestStartedAt) > 0) {
+      GM_setValue(AUTH_REQUEST_KEY, 0);
+    }
+    return;
+  }
   let finished = false;
   const notice = document.createElement('div');
   notice.textContent = '正在读取 DeepSeek 登录状态…';
@@ -1155,6 +1176,7 @@ function bootstrapAuthPage() {
     finished = true;
     GM_setValue(TOKEN_KEY, token);
     GM_setValue(AUTH_READY_KEY, Date.now());
+    GM_setValue(AUTH_REQUEST_KEY, 0);
     notice.textContent = '授权完成，正在返回超星页面…';
     setTimeout(() => {
       notice.remove();

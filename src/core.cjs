@@ -138,13 +138,14 @@ function fragmentPathTarget(state, path) {
 
 function applyDelta(state, delta) {
   if (!delta || typeof delta !== 'object') return;
-  if (delta.response && typeof delta.response === 'object') {
-    if (Array.isArray(delta.response.fragments)) {
+  const responseSnapshot = delta.response ?? delta.v?.response;
+  if (responseSnapshot && typeof responseSnapshot === 'object') {
+    if (Array.isArray(responseSnapshot.fragments)) {
       state.fragments = [];
-      mergeFragments(state, delta.response.fragments);
+      mergeFragments(state, responseSnapshot.fragments);
     }
-    if (typeof delta.response.content === 'string') {
-      state.directContent = delta.response.content;
+    if (typeof responseSnapshot.content === 'string') {
+      state.directContent = responseSnapshot.content;
     }
     recomputeAnswer(state);
     return;

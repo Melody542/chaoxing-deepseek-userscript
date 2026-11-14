@@ -18,6 +18,14 @@ function extractDeepSeekToken(storage) {
   return normalizeStoredToken(storage?.getItem('userToken'));
 }
 
+function isAuthRequestActive(value, now = Date.now(), maxAgeMs = 300000) {
+  const startedAt = Number(value);
+  return Number.isFinite(startedAt)
+    && startedAt > 0
+    && startedAt <= now
+    && now - startedAt <= maxAgeMs;
+}
+
 function assertDeepSeekEnvelope(payload) {
   const bizCode = payload?.data?.biz_code;
   if (
@@ -42,5 +50,6 @@ function assertDeepSeekEnvelope(payload) {
 module.exports = {
   normalizeStoredToken,
   extractDeepSeekToken,
+  isAuthRequestActive,
   assertDeepSeekEnvelope,
 };

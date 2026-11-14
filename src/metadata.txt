@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chaoxing AI Dialogue + DeepSeek
 // @namespace    local.chaoxing.deepseek
-// @version      0.1.0
+// @version      0.2.0
 // @description  Automatically answer the Chaoxing AI dialogue task using DeepSeek web API.
 // @match        https://mooc2-ans.chaoxing.com/mooc2-ans-vue/situationalDialogue/chat*
 // @match        https://chat.deepseek.com/*

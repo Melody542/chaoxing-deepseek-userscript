@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createPageAdapter } = require('../src/chaoxing.cjs');
-const { createPanel } = require('../src/app.cjs');
+const {
+  createPanel,
+  bootstrapAuthPage,
+} = require('../src/app.cjs');
 
 test('page adapter returns a changed latest message once', async () => {
   let current = {
@@ -105,4 +108,47 @@ test('panel has Start, Pause, and round status without end control', () => {
   assert.equal(dryRunChanges, 1);
   assert.equal(dryRunValue, false);
   panel.destroy();
+});
+
+test('manual DeepSeek tabs do not auto-close without an auth request', () => {
+  const previousDocument = globalThis.document;
+  const previousLocalStorage = globalThis.localStorage;
+  const previousGetValue = globalThis.GM_getValue;
+  const previousSetValue = globalThis.GM_setValue;
+  const previousClose = globalThis.close;
+  let appended = false;
+  let closed = false;
+  const writes = [];
+  try {
+    globalThis.document = {
+      body: {
+        appendChild() {
+          appended = true;
+        },
+      },
+      createElement() {
+        return { style: {} };
+      },
+    };
+    globalThis.localStorage = {
+      getItem() {
+        return JSON.stringify({ value: 'token', __version: '1' });
+      },
+    };
+    globalThis.GM_getValue = () => 0;
+    globalThis.GM_setValue = (key, value) => writes.push([key, value]);
+    globalThis.close = () => {
+      closed = true;
+    };
+    bootstrapAuthPage();
+    assert.equal(appended, false);
+    assert.equal(closed, false);
+    assert.deepEqual(writes, []);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.localStorage = previousLocalStorage;
+    globalThis.GM_getValue = previousGetValue;
+    globalThis.GM_setValue = previousSetValue;
+    globalThis.close = previousClose;
+  }
 });

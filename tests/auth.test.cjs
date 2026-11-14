@@ -4,6 +4,7 @@ const {
   normalizeStoredToken,
   extractDeepSeekToken,
   assertDeepSeekEnvelope,
+  isAuthRequestActive,
 } = require('../src/auth.cjs');
 
 test('normalizeStoredToken accepts raw and quoted tokens', () => {
@@ -28,6 +29,14 @@ test('extractDeepSeekToken unwraps the DeepSeek appKit value object', () => {
     ),
   };
   assert.equal(extractDeepSeekToken(storage), 'token-object');
+});
+
+test('isAuthRequestActive only accepts a recent explicit request', () => {
+  const now = 1_000_000;
+  assert.equal(isAuthRequestActive(now - 1000, now), true);
+  assert.equal(isAuthRequestActive(now - 300001, now), false);
+  assert.equal(isAuthRequestActive(0, now), false);
+  assert.equal(isAuthRequestActive('invalid', now), false);
 });
 
 test('assertDeepSeekEnvelope returns biz_data and rejects missing token', () => {

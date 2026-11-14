@@ -178,7 +178,7 @@ function createDeepSeekClient({
       ref_file_ids: [],
       thinking_enabled: false,
       search_enabled: false,
-      source: 'web',
+      source: 'default',
       action: null,
       preempt: false,
     };
