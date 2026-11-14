@@ -19,6 +19,17 @@ test('extractDeepSeekToken reads localStorage userToken', () => {
   assert.equal(extractDeepSeekToken(storage), 'token-123');
 });
 
+test('extractDeepSeekToken unwraps the DeepSeek appKit value object', () => {
+  const storage = {
+    getItem: (key) => (
+      key === 'userToken'
+        ? JSON.stringify({ value: 'token-object', __version: '1' })
+        : null
+    ),
+  };
+  assert.equal(extractDeepSeekToken(storage), 'token-object');
+});
+
 test('assertDeepSeekEnvelope returns biz_data and rejects missing token', () => {
   assert.deepEqual(
     assertDeepSeekEnvelope({

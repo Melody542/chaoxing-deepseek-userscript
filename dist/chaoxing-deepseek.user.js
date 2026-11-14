@@ -288,7 +288,9 @@ function normalizeStoredToken(raw) {
   if (!value || value === 'null' || value === 'undefined') return '';
   try {
     const parsed = JSON.parse(value);
-    return typeof parsed === 'string' ? parsed.trim() : '';
+    if (typeof parsed === 'string') return parsed.trim();
+    if (typeof parsed?.value === 'string') return parsed.value.trim();
+    return '';
   } catch {
     return value;
   }
