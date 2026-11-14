@@ -141,6 +141,81 @@ test('readTaskContext extracts task title from task panel text', () => {
   assert.equal(readTaskContext(document).title, 'word模块实践');
 });
 
+test('readTaskContext prefers the smallest matching task panel', () => {
+  const outer = {
+    textContent: '页面任务说明 word模块实践 完成检测 情景生成 其他所有对话内容',
+    getBoundingClientRect: () => ({ width: 1200, height: 800 }),
+  };
+  const inner = {
+    textContent: '任务说明 word模块实践 完成检测 情景生成',
+    getBoundingClientRect: () => ({ width: 320, height: 220 }),
+  };
+  const document = {
+    title: 'course',
+    querySelectorAll() {
+      return [outer, inner];
+    },
+    body: { textContent: '' },
+  };
+  assert.equal(readTaskContext(document).title, 'word模块实践');
+});
+
+test('readLatestAssistantMessage climbs above the composer wrapper', () => {
+  const chatRoot = fakeElement({ left: 100, width: 900 });
+  const composerWrapper = fakeElement({ left: 100, width: 600 });
+  const composer = fakeElement({
+    tag: 'textarea',
+    placeholder: '在此输入内容与角色对话',
+    left: 100,
+    width: 600,
+  });
+  composer.parentElement = composerWrapper;
+  composerWrapper.parentElement = chatRoot;
+  composerWrapper.querySelector = (selector) => (
+    selector.includes('textarea') ? composer : null
+  );
+  composerWrapper.querySelectorAll = () => [];
+
+  const left = fakeElement({ text: '请说明页码设置', left: 120, width: 320 });
+  left.style = {
+    borderRadius: '12px',
+    backgroundColor: 'rgb(255,255,255)',
+  };
+  left.parentElement = chatRoot;
+  const right = fakeElement({ text: '我的前一条回答', left: 620, width: 260 });
+  right.style = {
+    borderRadius: '12px',
+    backgroundColor: 'rgb(100,100,100)',
+  };
+  right.parentElement = chatRoot;
+  chatRoot.querySelectorAll = (selector) => (
+    selector === 'div' ? [left, right, composerWrapper] : []
+  );
+
+  const document = {
+    defaultView: {
+      getComputedStyle: (element) => ({
+        display: 'block',
+        borderRadius: element.style?.borderRadius ?? '0px',
+        backgroundColor: element.style?.backgroundColor ?? 'transparent',
+      }),
+    },
+    querySelectorAll(selector) {
+      if (selector === 'textarea') return [composer];
+      return [];
+    },
+    body: {
+      querySelectorAll() {
+        return [];
+      },
+    },
+  };
+  assert.equal(
+    readLatestAssistantMessage(document)?.text,
+    '请说明页码设置',
+  );
+});
+
 test('writeAndSend updates a textarea, dispatches input, then clicks send', async () => {
   const order = [];
   const composer = fakeElement({

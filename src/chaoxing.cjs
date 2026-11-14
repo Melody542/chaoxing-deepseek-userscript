@@ -44,10 +44,13 @@ function findSendButton(document) {
 
 function readTaskContext(document) {
   const all = [...document.querySelectorAll('div, section, aside')];
-  const heading = all.find(
+  const heading = all.filter(
     (element) => /任务说明/.test(normalizeText(element.textContent))
       && visible(element),
-  );
+  ).sort(
+    (left, right) => normalizeText(left.textContent).length
+      - normalizeText(right.textContent).length,
+  )[0];
   const text = normalizeText(heading?.textContent);
   if (!text) {
     return {
@@ -56,7 +59,7 @@ function readTaskContext(document) {
     };
   }
   const title = text.match(
-    /任务说明\s+(.+?)\s+(?:完成任务|完成\w|情景生成)/,
+    /任务说明\s+(.+?)\s*(?:完成\S*|情景生成|$)/,
   )?.[1] ?? document.title;
   return {
     title: normalizeText(title),
@@ -66,9 +69,29 @@ function readTaskContext(document) {
 
 function messageCandidates(document) {
   const composer = findComposer(document);
-  const anchor = composer?.closest('main, section, div')
+  let anchor = composer?.closest('main, section, div')
+    ?? composer?.parentElement
     ?? document.body
     ?? document;
+  let nodes = [];
+  while (anchor && anchor !== document.body) {
+    nodes = collectMessageCandidates(document, anchor);
+    const withoutComposer = nodes.filter(
+      (element) => !element.contains?.(composer),
+    );
+    if (withoutComposer.length > 0) return withoutComposer;
+    anchor = anchor.parentElement;
+  }
+  nodes = collectMessageCandidates(
+    document,
+    document.body ?? document,
+  );
+  return nodes.filter(
+    (element) => !element.contains?.(composer),
+  );
+}
+
+function collectMessageCandidates(document, anchor) {
   const nodes = [...anchor.querySelectorAll('div')].filter((element) => {
     if (!visible(element)) return false;
     const text = normalizeText(element.textContent);
