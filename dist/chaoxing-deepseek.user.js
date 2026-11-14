@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chaoxing AI Dialogue + DeepSeek
 // @namespace    local.chaoxing.deepseek
-// @version      0.2.1
+// @version      0.2.2
 // @description  Automatically answer the Chaoxing AI dialogue task using DeepSeek web API.
 // @match        https://mooc2-ans.chaoxing.com/mooc2-ans-vue/situationalDialogue/chat*
 // @match        https://chat.deepseek.com/*
@@ -180,6 +180,13 @@ function fragmentPathTarget(state, path) {
   return numeric;
 }
 
+function lastVisibleFragmentIndex(state) {
+  for (let index = state.fragments.length - 1; index >= 0; index -= 1) {
+    if (isVisibleFragment(state.fragments[index])) return index;
+  }
+  return -1;
+}
+
 function applyDelta(state, delta) {
   if (!delta || typeof delta !== 'object') return;
   const responseSnapshot = delta.response ?? delta.v?.response;
@@ -253,8 +260,16 @@ function applyDelta(state, delta) {
   }
 
   if (!path && typeof value === 'string') {
-    state.directContent += value;
+    const activeFragment = lastVisibleFragmentIndex(state);
+    if (activeFragment >= 0) {
+      state.fragments[activeFragment].content = (
+        state.fragments[activeFragment].content ?? ''
+      ) + value;
+    } else {
+      state.directContent += value;
+    }
     recomputeAnswer(state);
+    return;
   }
 }
 

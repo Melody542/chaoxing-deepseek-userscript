@@ -105,3 +105,22 @@ test('SSE parser handles a captured current DeepSeek response', () => {
   assert.equal(state.responseMessageId, 2);
   assert.equal(state.finished, true);
 });
+
+test('SSE parser appends data-only chunks to the active fragment', () => {
+  const state = createSseState();
+  const response = [
+    'event: ready\ndata: {"response_message_id":2}\n\n',
+    'data: {"v":{"response":{"fragments":[{"id":1,"type":"RESPONSE","content":"结论："}],"has_pending_fragment":false}}}\n\n',
+    'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"在Scratch中"}\n\n',
+    'data: {"v":"广播发出后立即继续"}\n\n',
+    'data: {"v":"，广播并等待会暂停当前脚本。"}\n\n',
+    'data: {"p":"response/status","o":"SET","v":"FINISHED"}\n\n',
+  ].join('');
+  consumeSseText(state, response).forEach(
+    (event) => applySseEvent(state, event),
+  );
+  assert.equal(
+    state.answer,
+    '结论：在Scratch中广播发出后立即继续，广播并等待会暂停当前脚本。',
+  );
+});
